@@ -1,14 +1,11 @@
 /**
- * Add this file to the EXISTING Wiltshire Chess News API Apps Script project.
- * Keep the existing doGet and image/news handling intact.
- *
- * At the VERY START of existing doGet(e), add:
- *   if (e.parameter.section) return wccaSectionResponse_(e);
- *
- * In the existing news JSON response, add:
- *   settings: wccaSettings_()
- *
- * Then deploy a NEW VERSION of the existing web app.
+ * Copy into a NEW .gs file in the existing News API Apps Script project.
+ * In the original file change ONLY:
+ *   function doGet(e) {
+ * to:
+ *   function wccaOriginalDoGet(e) {
+ * This wrapper routes new sections and preserves the original API unchanged.
+ * Deploy a new version of the existing web app.
  */
 const WCCA_CONTENT_SHEET_ID_ = '1RrAlAiASvgZA22cYCH53WD-ThNx-F4PJzNViwEVdSRc';
 function wccaSheetRows_(tab) {
@@ -25,13 +22,19 @@ function wccaSettings_(){
   wccaSheetRows_('Settings').forEach(row=>{if(row.setting)result[row.setting]=row.value});
   return result;
 }
+function doGet(e){
+  if(e && e.parameter && e.parameter.section)return wccaSectionResponse_(e);
+  return wccaOriginalDoGet(e);
+}
 function wccaSectionResponse_(e){
   const section=String(e.parameter.section||'').toLowerCase();
   const callback=String(e.parameter.callback||'');
   if(!/^[a-zA-Z_$][\w$]*$/.test(callback))throw Error('Invalid JSONP callback');
   let payload;
   try {
-    if(section==='clubs'){
+    if(section==='settings'){
+      payload={ok:true,settings:wccaSettings_()};
+    } else if(section==='clubs'){
       payload={ok:true,clubs:wccaSheetRows_('Clubs').map(r=>({
         club:r.club,location:r.location,webPage:r['web page']
       })).filter(r=>r.club)};
