@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 112" role="img" aria-label="Wiltshire Chess W crown">
 <style>
-.crown{fill:#087442;stroke:#315848;stroke-width:1.5;stroke-linejoin:round}
-.detail{stroke:#f5faf5}
+.crown{fill:#087442;stroke:#173c2b;stroke-width:3.5;stroke-linejoin:round}
+.detail{stroke:#173c2b}
 @media (prefers-color-scheme: dark){.crown{stroke:#e2e8e3;stroke-width:3.5}.detail{stroke:#e2e8e3}}
 </style>
 <g class="crown"><circle cx="12" cy="17" r="7"/><circle cx="60" cy="8" r="7"/><circle cx="108" cy="17" r="7"/><path d="M12 29 33 75 60 24 87 75 108 29 97 91 23 91Z"/><path d="M25 96H95L91 106H29Z"/></g>
