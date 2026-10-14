@@ -1,5 +1,5 @@
 /**
- * Copy into a NEW .gs file in the existing News API Apps Script project.
+ * Replace the contents of the EXISTING content-extension.gs in the News API Apps Script project.
  * In the original file change ONLY:
  *   function doGet(e) {
  * to:
