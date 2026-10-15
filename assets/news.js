@@ -18,7 +18,20 @@ async function image(img,name){if(!name)return;try{if(!imageCache.has(name))imag
 let defaultIcon='knight';
 const ICON_KEYS=new Set('knight king queen rook bishop pawn trophy clock calendar announcement club league results junior women county fide ecf online rapid blitz classical team archive'.split(' '));
 function placeholder(id,icon){const pieces=['knight','king','queen','rook','bishop','pawn'];let hash=0;for(const ch of String(id))hash=(hash*31+ch.charCodeAt(0))>>>0;const key=String(icon||'').trim().toLowerCase();const selected=ICON_KEYS.has(key)?key:(ICON_KEYS.has(defaultIcon)?defaultIcon:pieces[hash%pieces.length]);const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('class','news-icon-placeholder');svg.setAttribute('viewBox','0 0 160 100');svg.setAttribute('aria-hidden','true');const use=document.createElementNS('http://www.w3.org/2000/svg','use');use.setAttribute('href','assets/icons/sprite.svg?v=3#'+selected);svg.append(use);return svg}
-async function thumbnail(img,name){try{const thumb='thumb-'+name;if(!imageCache.has(thumb))imageCache.set(thumb,jsonp({image:thumb}).then(x=>x.image));img.src=await imageCache.get(thumb)}catch(e){img.replaceWith(placeholder(img.dataset.articleId||name,img.dataset.articleIcon));console.info('Using chess-piece placeholder for:',name)}}
+async function thumbnail(img,name){
+  const thumb='thumb-'+name;
+  const candidates=[thumb];
+  if(!/\.(jpe?g|png|webp|gif)$/i.test(name)) candidates.push(thumb+'.jpg',thumb+'.jpeg',thumb+'.png');
+  candidates.push(name);
+  for(const candidate of candidates){
+    try{
+      if(!imageCache.has(candidate))imageCache.set(candidate,jsonp({image:candidate}).then(x=>x.image));
+      img.src=await imageCache.get(candidate);
+      return;
+    }catch(e){console.info('Image candidate unavailable:',candidate)}
+  }
+  img.replaceWith(placeholder(img.dataset.articleId||name,img.dataset.articleIcon));
+}
 function queueThumbnail(img,name){if(!name)return;img.dataset.newsImage=name;if(thumbObserver)thumbObserver.observe(img);else thumbnail(img,name)}
 const thumbObserver=('IntersectionObserver' in window)?new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){thumbObserver.unobserve(entry.target);thumbnail(entry.target,entry.target.dataset.newsImage)}}},{rootMargin:'180px'}):null;
 function card(a){const node=el('article','news-card');if(a.images.length){const img=el('img','news-thumb');img.alt=a.title;img.loading='lazy';img.dataset.articleId=a.id;img.dataset.articleIcon=a.icon||'';node.append(img);queueThumbnail(img,a.images[0])}else node.append(placeholder(a.id,a.icon));if(a.publishedDate){const t=el('time','',formatted(a.publishedDate));t.dateTime=a.publishedDate.toISOString();node.append(t)}node.append(el('h3','',a.title),el('p','',a.summary||a.body?.slice(0,170)||''));const more=el('a','','Read more →');more.href=link(a);node.append(more);return node}
