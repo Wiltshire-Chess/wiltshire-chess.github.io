@@ -25,7 +25,7 @@ In each live league tab, enter one row per board:
 
 - Numeric Board values (`1`, `2`, `3` …) count towards the official match score.
 - `S` means spare board: it appears in the match detail but is excluded from the match score and league table.
-- Result is from the **home team/player** perspective: `W`, `D`, or `L`.
+- Result is from the **home team/player** perspective: `1` for a win, `0` for a loss, or `0.5` for a draw. The website displays these as `1–0`, `0–1`, and `½–½`.
 
 Do not delete the settings rows above the result headings.
 
