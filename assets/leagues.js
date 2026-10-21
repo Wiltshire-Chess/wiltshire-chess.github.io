@@ -53,9 +53,6 @@
     if (href) card.href = href;
 
     card.append(node('h2', '', league.name));
-    card.append(node('p', 'league-type',
-      league.type === 'live' ? 'Wiltshire live league' :
-      league.type === 'static' ? 'Table and archive' : 'External league'));
     if (league.description) card.append(node('p', '', league.description));
     card.append(node('span', 'league-card-action',
       league.type === 'external' ? 'View league website →' : 'View league →'));
