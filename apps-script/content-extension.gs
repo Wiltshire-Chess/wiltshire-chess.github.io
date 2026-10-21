@@ -295,7 +295,7 @@ function wccaStandings_(matches) {
   const teams = {};
   const get = name => teams[name] || (teams[name] = {
     team: name, played: 0, won: 0, drawn: 0, lost: 0,
-    gamePoints: 0, matchPoints: 0
+    gamesFor: 0, gamesAgainst: 0, points: 0
   });
 
   matches.forEach(match => {
@@ -303,10 +303,12 @@ function wccaStandings_(matches) {
     const away = get(match.away);
     home.played++;
     away.played++;
-    home.gamePoints += match.homeScore;
-    away.gamePoints += match.awayScore;
-    home.matchPoints += match.homeMatchPoints;
-    away.matchPoints += match.awayMatchPoints;
+    home.gamesFor += match.homeScore;
+    home.gamesAgainst += match.awayScore;
+    away.gamesFor += match.awayScore;
+    away.gamesAgainst += match.homeScore;
+    home.points += match.homeMatchPoints;
+    away.points += match.awayMatchPoints;
 
     if (match.homeScore > match.awayScore) { home.won++; away.lost++; }
     else if (match.homeScore < match.awayScore) { away.won++; home.lost++; }
@@ -314,7 +316,9 @@ function wccaStandings_(matches) {
   });
 
   return Object.values(teams)
-    .sort((a, b) => b.matchPoints - a.matchPoints || b.gamePoints - a.gamePoints || a.team.localeCompare(b.team))
+    // Rank on match points only.  GF and GA are displayed as useful
+    // information, but are deliberately not tie-breakers.
+    .sort((a, b) => b.points - a.points || a.team.localeCompare(b.team))
     .map((team, index) => Object.assign({ position: index + 1 }, team));
 }
 
