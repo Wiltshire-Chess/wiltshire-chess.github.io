@@ -5,7 +5,7 @@ This folder is the version-controlled backup of the live **Wiltshire Chess API**
 It contains two files:
 
 - `Code.gs` — News and image endpoint.
-- `content-extensions.gs` — Settings, Clubs, Committee, Pages and Leagues endpoint.
+- `content-extension.gs` — Settings, Clubs, Committee, Pages and Leagues endpoint.
 
 The deployed API is managed in Google Apps Script.  GitHub Pages does **not** deploy these files automatically.
 
