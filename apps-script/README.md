@@ -42,3 +42,7 @@ Optional columns may follow in this order:
 |---|---|---|---|
 
 Leave any optional cell blank to omit it from the website. Document links may be public https:// URLs or site-relative GitHub Pages paths such as /documents/open-2627-rules.pdf.
+
+## League table scoring
+
+League tables award 2 points for a match win, 1 for a draw and 0 for a loss. They are sorted by Pts only; GF and GA are shown for information and are not used as tie-breakers.
