@@ -134,30 +134,49 @@
     return wrap;
   }
 
+  function publicUrl(value) {
+    try {
+      const url = new URL(String(value || ''), window.location.href);
+      return ['https:', 'http:'].includes(url.protocol) ? url.href : '';
+    } catch {
+      return '';
+    }
+  }
+
+  function informationBox(league) {
+    const documents = (league.documents || [])
+      .map(document => ({ label: document.label, href: publicUrl(document.url) }))
+      .filter(document => document.href);
+    if (!league.description && !documents.length) return null;
+
+    const box = node('section', 'league-info');
+    box.append(node('h2', '', 'League information'));
+    if (league.description) box.append(node('p', '', league.description));
+    if (documents.length) {
+      const links = node('div', 'league-document-links');
+      documents.forEach(document => {
+        const link = node('a', 'league-document-link', document.label);
+        link.href = document.href;
+        links.append(link);
+      });
+      box.append(links);
+    }
+    return box;
+  }
+
   function renderDetails(target, league) {
     target.replaceChildren();
-    if (league.description) target.append(node('p', 'league-description', league.description));
+    const information = informationBox(league);
+    if (information) target.append(information);
 
     if (league.type === 'external') {
-      const link = node('a', 'button', 'View ' + league.name + ' results →');
-      link.href = league.externalUrl;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      target.append(link);
+      const href = publicUrl(league.externalUrl);
+      if (href) {
+        const link = node('a', 'button', 'View ' + league.name + ' results →');
+        link.href = href;
+        target.append(link);
+      }
       return;
-    }
-
-    if (league.documents && league.documents.length) {
-      const docs = node('p', 'league-documents');
-      league.documents.forEach((doc, index) => {
-        if (index) docs.append(document.createTextNode(' · '));
-        const link = node('a', '', doc.label);
-        link.href = doc.url;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        docs.append(link);
-      });
-      target.append(docs);
     }
 
     if (league.type === 'static') {
