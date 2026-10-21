@@ -235,12 +235,13 @@ function wccaMatches_(rows, settings) {
     }
 
     const spare = String(board).trim().toUpperCase() === 'S';
-    const result = wccaBoardResult_(wccaField_(row, 'result', 'home result', 'score'));
+    const rawResult = wccaField_(row, 'result', 'home result', 'score');
+    const result = wccaBoardResult_(rawResult);
     matches[key].boards.push({
       board: String(board).trim(),
       homePlayer: wccaField_(row, 'home player', 'home name'),
       awayPlayer: wccaField_(row, 'away player', 'away name'),
-      result: wccaField_(row, 'result', 'home result', 'score'),
+      result: wccaBoardDisplay_(rawResult),
       notes: wccaField_(row, 'notes', 'note'),
       spare: spare
     });
@@ -278,8 +279,16 @@ function wccaBoardResult_(value) {
 
   if (['W', '1-0', '1:0', '1'].includes(result)) return { home: 1, away: 0 };
   if (['L', '0-1', '0:1', '0'].includes(result)) return { home: 0, away: 1 };
-  if (['D', 'DRAW', '0.5-0.5', '1/2-1/2'].includes(result)) return { home: 0.5, away: 0.5 };
+  if (['D', 'DRAW', '0.5', '0.5-0.5', '1/2-1/2'].includes(result)) return { home: 0.5, away: 0.5 };
   return null;
+}
+
+function wccaBoardDisplay_(value) {
+  const score = wccaBoardResult_(value);
+  if (!score) return String(value || '').trim();
+  if (score.home === 1) return '1–0';
+  if (score.away === 1) return '0–1';
+  return '½–½';
 }
 
 function wccaStandings_(matches) {
@@ -362,11 +371,11 @@ function wccaEnsureLiveTemplate_(book, name) {
     ['Match points win', '2'],
     ['Match points draw', '1'],
     ['Rules URL', ''],
-    ['Notes', 'Enter 1, 2, 3… for official boards. Enter S for a spare board: it is shown but does not count.']
+    ['Notes', 'Use 1 for a home win, 0 for a home loss, or 0.5 for a draw. Enter S for a spare board: it is shown but does not count.']
   ]);
   sheet.getRange(8, 1, 1, 8).setValues([[
     'Date', 'Home Team', 'Away Team', 'Board',
-    'Home Player', 'Away Player', 'Result', 'Notes'
+    'Home Player', 'Away Player', 'Result (1 / 0 / 0.5)', 'Notes'
   ]]);
   sheet.setFrozenRows(8);
   sheet.getRange('A8:H8').setFontWeight('bold');
