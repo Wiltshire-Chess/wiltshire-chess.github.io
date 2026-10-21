@@ -110,7 +110,10 @@ function wccaLeagueDirectory_() {
     name: value(row, 'League name', 'League', 'Name'),
     type: value(row, 'Type of league', 'Type').toLowerCase(),
     dataSource: value(row, 'Place for the data', 'Data source', 'Source', 'Tab name', 'URL'),
-    description: value(row, 'Description', 'Summary')
+    description: value(row, 'Description', 'Summary'),
+    resultsTemplate: value(row, 'Results Template', 'Result Template', 'Template'),
+    schedule: value(row, 'Schedule'),
+    rules: value(row, 'Rules', 'Rules URL')
   })).filter(league =>
     league.name &&
     ['live', 'external', 'static'].includes(league.type) &&
@@ -128,6 +131,7 @@ function wccaLeague_(requestedName) {
       name: entry.name,
       type: 'external',
       description: entry.description,
+      documents: wccaDirectoryDocuments_(entry),
       externalUrl: entry.dataSource
     };
   }
@@ -137,11 +141,30 @@ function wccaLeague_(requestedName) {
       name: entry.name,
       type: 'static',
       description: entry.description,
+      documents: wccaDirectoryDocuments_(entry),
       table: wccaStaticLeagueTable_(entry.dataSource)
     };
   }
 
   return wccaLiveLeague_(entry);
+}
+
+function wccaDirectoryDocuments_(entry) {
+  return [
+    { label: 'Results template', url: entry.resultsTemplate },
+    { label: 'Schedule', url: entry.schedule },
+    { label: 'Rules', url: entry.rules }
+  ].filter(document => document.url);
+}
+
+function wccaMergeDocuments_(first, second) {
+  const seen = {};
+  return first.concat(second).filter(document => {
+    const key = String(document.url || '').trim();
+    if (!key || seen[key]) return false;
+    seen[key] = true;
+    return true;
+  });
 }
 
 /* ---------- Live league results ---------- */
@@ -161,7 +184,10 @@ function wccaLiveLeague_(entry) {
     type: 'live',
     description: entry.description,
     settings: settings,
-    documents: wccaLeagueDocuments_(settings),
+    documents: wccaMergeDocuments_(
+      wccaDirectoryDocuments_(entry),
+      wccaLeagueDocuments_(settings)
+    ),
     standings: wccaStandings_(matches),
     matches: matches
   };
@@ -300,11 +326,17 @@ function setupLeaguesV1() {
   const directory = book.getSheetByName('Leagues') || book.insertSheet('Leagues');
 
   if (directory.getLastRow() === 0) {
-    directory.getRange(1, 1, 1, 3).setValues([[
-      'League name', 'Type of league', 'Place for the data'
+    directory.getRange(1, 1, 1, 7).setValues([[
+      'League name', 'Type of league', 'Place for the data',
+      'Description', 'Results Template', 'Schedule', 'Rules'
     ]]);
     directory.setFrozenRows(1);
-    directory.getRange('A1:C1').setFontWeight('bold');
+    directory.getRange('A1:G1').setFontWeight('bold');
+  } else if (directory.getLastColumn() < 7) {
+    directory.getRange(1, 4, 1, 4).setValues([[
+      'Description', 'Results Template', 'Schedule', 'Rules'
+    ]]);
+    directory.getRange('D1:G1').setFontWeight('bold');
   }
 
   wccaEnsureDirectoryRow_(directory, 'Wiltshire 26/27 Open', 'live', 'Wiltshire 26/27 Open');
