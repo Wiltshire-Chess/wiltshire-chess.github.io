@@ -236,7 +236,11 @@
       const response = await request({ section: 'league', name });
       render(host, response.league);
     } catch (error) {
-      host.replaceChildren(node('p', 'news-error', 'Unable to load this league at present.'));
+      const debug = new URLSearchParams(location.search).get('debug') === '1';
+      const message = debug
+        ? 'Unable to load this league: ' + (error && error.message || 'Unknown error')
+        : 'Unable to load this league at present.';
+      host.replaceChildren(node('p', 'news-error', message));
       console.error(error);
     }
   });
