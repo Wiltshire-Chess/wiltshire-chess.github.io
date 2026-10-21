@@ -78,7 +78,7 @@
     const table = node('table', 'league-table');
     const head = node('thead');
     const header = node('tr');
-    [['#', 'Position'], ['Team'], ['P', 'Played'], ['W', 'Won'], ['D', 'Drawn'], ['L', 'Lost'], ['GP', 'Game points'], ['MP', 'Match points']]
+    [['#', 'Position'], ['Team'], ['P', 'Played'], ['W', 'Won'], ['D', 'Drawn'], ['L', 'Lost'], ['GF', 'Games for'], ['GA', 'Games against'], ['Pts', 'League points']]
       .forEach(([label, title]) => {
         const cell = node('th', '', label);
         cell.title = title;
@@ -89,7 +89,7 @@
     const body = node('tbody');
     rows.forEach(row => {
       const line = node('tr');
-      [row.position, row.team, row.played, row.won, row.drawn, row.lost, row.gamePoints, row.matchPoints]
+      [row.position, row.team, row.played, row.won, row.drawn, row.lost, row.gamesFor, row.gamesAgainst, row.points]
         .forEach(value => line.append(node('td', '', value)));
       body.append(line);
     });
