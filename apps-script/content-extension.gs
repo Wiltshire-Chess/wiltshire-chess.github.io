@@ -373,13 +373,17 @@ function wccaStandings_(matches) {
   );
 
   // Teams not separated by an implemented tie-break share the position.
+  // Keep the last ordinal separately; the source team rows do not yet have
+  // display positions while Array.map is running.
+  let lastOrdinal = 0;
   return ranked.map((team, index, all) => {
     const prior = all[index - 1];
     const equal = prior &&
       team.points === prior.points &&
       team.gamesFor === prior.gamesFor &&
       team.penaltyPoints === prior.penaltyPoints;
-    const position = equal ? '=' + prior.position.replace(/^=/, '') : String(index + 1);
+    if (!equal) lastOrdinal = index + 1;
+    const position = (equal ? '=' : '') + lastOrdinal;
     let tieBreak = '';
     if (prior && team.points === prior.points) {
       if (team.gamesFor !== prior.gamesFor) tieBreak = 'Separated on game points';
