@@ -230,21 +230,37 @@ function wccaMatches_(rows, settings) {
     if (!matches[key]) {
       matches[key] = {
         id: key, date: date, home: home, away: away, boards: [],
-        homeScore: 0, awayScore: 0, homeMatchPoints: 0, awayMatchPoints: 0
+        homeScore: 0, awayScore: 0, homeMatchPoints: 0, awayMatchPoints: 0,
+        homePenaltyPoints: 0, awayPenaltyPoints: 0
       };
     }
 
-    const spare = String(board).trim().toUpperCase() === 'S';
+    const boardValue = String(board).trim();
+    const spare = boardValue.toUpperCase() === 'S';
+    const defaultInfo = wccaDefaultInfo_(wccaField_(row, 'default', 'default status'));
     const rawResult = wccaField_(row, 'result', 'home result', 'score');
-    const result = wccaBoardResult_(rawResult);
+    // A default determines the board result even if the spreadsheet result
+    // cell is blank or has been entered incorrectly.
+    const result = defaultInfo.side === 'H' ? { home: 0, away: 1 } :
+      defaultInfo.side === 'A' ? { home: 1, away: 0 } :
+      wccaBoardResult_(rawResult);
+    const displayedResult = defaultInfo.side === 'H' ? '0–1' :
+      defaultInfo.side === 'A' ? '1–0' : wccaBoardDisplay_(rawResult);
+    const penalty = defaultInfo.penaltyEligible ? wccaDefaultPenalty_(boardValue) : 0;
+
     matches[key].boards.push({
-      board: String(board).trim(),
+      board: boardValue,
       homePlayer: wccaField_(row, 'home player', 'home name'),
       awayPlayer: wccaField_(row, 'away player', 'away name'),
-      result: wccaBoardDisplay_(rawResult),
+      result: displayedResult,
       notes: wccaField_(row, 'notes', 'note'),
-      spare: spare
+      spare: spare,
+      defaultCode: defaultInfo.code,
+      penaltyPoints: penalty
     });
+
+    if (defaultInfo.side === 'H') matches[key].homePenaltyPoints += penalty;
+    if (defaultInfo.side === 'A') matches[key].awayPenaltyPoints += penalty;
 
     // Only numeric boards count in the official match score.  S is a spare:
     // displayed in the match detail, never included in the league calculation.
@@ -291,11 +307,34 @@ function wccaBoardDisplay_(value) {
   return '½–½';
 }
 
+// H and A are ordinary board defaults. HA and AA record a match default
+// agreed in advance, which scores the board but carries no penalty.
+function wccaDefaultInfo_(value) {
+  const code = String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (code === 'H') return { code: 'H', side: 'H', penaltyEligible: true };
+  if (code === 'A') return { code: 'A', side: 'A', penaltyEligible: true };
+  if (code === 'HA') return { code: 'HA', side: 'H', penaltyEligible: false };
+  if (code === 'AA') return { code: 'AA', side: 'A', penaltyEligible: false };
+  return { code: '', side: '', penaltyEligible: false };
+}
+
+function wccaDefaultPenalty_(board) {
+  const value = String(board || '').trim().toUpperCase();
+  if (value === 'S') return 1;
+  const number = Number(value);
+  if (number === 1) return 5;
+  if (number === 2) return 4;
+  if (number === 3) return 3;
+  if (number === 4) return 2;
+  return number > 4 ? 1 : 0;
+}
+
 function wccaStandings_(matches) {
   const teams = {};
   const get = name => teams[name] || (teams[name] = {
     team: name, played: 0, won: 0, drawn: 0, lost: 0,
-    gamesFor: 0, gamesAgainst: 0, points: 0
+    gamesFor: 0, gamesAgainst: 0, rawMatchPoints: 0,
+    penaltyPoints: 0, pointDeduction: 0, points: 0
   });
 
   matches.forEach(match => {
@@ -307,24 +346,47 @@ function wccaStandings_(matches) {
     home.gamesAgainst += match.awayScore;
     away.gamesFor += match.awayScore;
     away.gamesAgainst += match.homeScore;
-    home.points += match.homeMatchPoints;
-    away.points += match.awayMatchPoints;
+    home.rawMatchPoints += match.homeMatchPoints;
+    away.rawMatchPoints += match.awayMatchPoints;
+    home.penaltyPoints += match.homePenaltyPoints;
+    away.penaltyPoints += match.awayPenaltyPoints;
 
     if (match.homeScore > match.awayScore) { home.won++; away.lost++; }
     else if (match.homeScore < match.awayScore) { away.won++; home.lost++; }
     else { home.drawn++; away.drawn++; }
   });
 
-  return Object.values(teams)
-    // Rule 14(a)-(b): match points first, then game points. GF is the
-    // team's game-points total; spare boards were excluded above.
-    // The remaining published tie-breakers are not automated yet.
-    .sort((a, b) =>
-      b.points - a.points ||
-      b.gamesFor - a.gamesFor ||
-      a.team.localeCompare(b.team)
-    )
-    .map((team, index) => Object.assign({ position: index + 1 }, team));
+  const ranked = Object.values(teams);
+  ranked.forEach(team => {
+    // Rule 14(d): one match point is deducted for every 10 penalty points.
+    team.pointDeduction = Math.floor(team.penaltyPoints / 10);
+    team.points = team.rawMatchPoints - team.pointDeduction;
+  });
+
+  ranked.sort((a, b) =>
+    // Rule 14(a), then 14(b), then 14(d). Head-to-head and the
+    // lowest-board calculation remain deliberately manual for now.
+    b.points - a.points ||
+    b.gamesFor - a.gamesFor ||
+    a.penaltyPoints - b.penaltyPoints ||
+    a.team.localeCompare(b.team)
+  );
+
+  // Teams not separated by an implemented tie-break share the position.
+  return ranked.map((team, index, all) => {
+    const prior = all[index - 1];
+    const equal = prior &&
+      team.points === prior.points &&
+      team.gamesFor === prior.gamesFor &&
+      team.penaltyPoints === prior.penaltyPoints;
+    const position = equal ? '=' + prior.position.replace(/^=/, '') : String(index + 1);
+    let tieBreak = '';
+    if (prior && team.points === prior.points) {
+      if (team.gamesFor !== prior.gamesFor) tieBreak = 'Separated on game points';
+      else if (team.penaltyPoints !== prior.penaltyPoints) tieBreak = 'Separated on penalty points';
+    }
+    return Object.assign({ position: position, tieBreak: tieBreak }, team);
+  });
 }
 
 function wccaStaticLeagueTable_(tabName) {
@@ -380,15 +442,15 @@ function wccaEnsureLiveTemplate_(book, name) {
     ['Match points win', '2'],
     ['Match points draw', '1'],
     ['Rules URL', ''],
-    ['Notes', 'Use 1 for a home win, 0 for a home loss, or 0.5 for a draw. Enter S for a spare board: it is shown but does not count.']
+    ['Notes', 'Use 1 for a home win, 0 for a home loss, or 0.5 for a draw. Board S is a spare. Default: H or A; HA or AA is agreed in advance and carries no penalty.']
   ]);
-  sheet.getRange(8, 1, 1, 8).setValues([[
+  sheet.getRange(8, 1, 1, 9).setValues([[
     'Date', 'Home Team', 'Away Team', 'Board',
-    'Home Player', 'Away Player', 'Result (1 / 0 / 0.5)', 'Notes'
+    'Home Player', 'Away Player', 'Result (1 / 0 / 0.5)', 'Default', 'Notes'
   ]]);
   sheet.setFrozenRows(8);
-  sheet.getRange('A8:H8').setFontWeight('bold');
-  sheet.autoResizeColumns(1, 8);
+  sheet.getRange('A8:I8').setFontWeight('bold');
+  sheet.autoResizeColumns(1, 9);
 }
 
 /* ---------- helpers ---------- */
