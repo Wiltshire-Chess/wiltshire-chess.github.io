@@ -316,9 +316,14 @@ function wccaStandings_(matches) {
   });
 
   return Object.values(teams)
-    // Rank on match points only.  GF and GA are displayed as useful
-    // information, but are deliberately not tie-breakers.
-    .sort((a, b) => b.points - a.points || a.team.localeCompare(b.team))
+    // Rule 14(a)-(b): match points first, then game points. GF is the
+    // team's game-points total; spare boards were excluded above.
+    // The remaining published tie-breakers are not automated yet.
+    .sort((a, b) =>
+      b.points - a.points ||
+      b.gamesFor - a.gamesFor ||
+      a.team.localeCompare(b.team)
+    )
     .map((team, index) => Object.assign({ position: index + 1 }, team));
 }
 
