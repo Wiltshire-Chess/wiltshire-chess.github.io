@@ -78,7 +78,7 @@
     const table = node('table', 'league-table');
     const head = node('thead');
     const header = node('tr');
-    [['#', 'Position'], ['Team'], ['P', 'Played'], ['W', 'Won'], ['D', 'Drawn'], ['L', 'Lost'], ['GF', 'Games for'], ['GA', 'Games against'], ['Pts', 'League points']]
+    [['#', 'Position'], ['Team'], ['P', 'Played'], ['W', 'Won'], ['D', 'Drawn'], ['L', 'Lost'], ['GF', 'Game points for'], ['GA', 'Game points against'], ['Pen', 'Penalty points'], ['Pts', 'Match points after deductions']]
       .forEach(([label, title]) => {
         const cell = node('th', '', label);
         cell.title = title;
@@ -89,8 +89,30 @@
     const body = node('tbody');
     rows.forEach(row => {
       const line = node('tr');
-      [row.position, row.team, row.played, row.won, row.drawn, row.lost, row.gamesFor, row.gamesAgainst, row.points]
+      const position = node('td', '', row.position);
+      if (row.tieBreak) {
+        const note = node('button', 'table-note', '*');
+        note.type = 'button';
+        note.title = row.tieBreak;
+        note.setAttribute('aria-label', row.tieBreak);
+        note.addEventListener('click', () => window.alert(row.tieBreak));
+        position.append(note);
+      }
+      line.append(position);
+      [row.team, row.played, row.won, row.drawn, row.lost, row.gamesFor, row.gamesAgainst, row.penaltyPoints]
         .forEach(value => line.append(node('td', '', value)));
+      const points = node('td', '', row.points);
+      if (row.pointDeduction > 0) {
+        const note = node('button', 'table-note', '*');
+        const message = row.pointDeduction + ' match point' + (row.pointDeduction === 1 ? '' : 's') +
+          ' deducted for ' + row.penaltyPoints + ' penalty points.';
+        note.type = 'button';
+        note.title = message;
+        note.setAttribute('aria-label', message);
+        note.addEventListener('click', () => window.alert(message));
+        points.append(note);
+      }
+      line.append(points);
       body.append(line);
     });
     table.append(body);
