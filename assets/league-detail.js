@@ -73,7 +73,7 @@
     return box;
   }
 
-  function standingsTable(rows) {
+  function standingsTable(rows, onTeamSelected) {
     const wrap = node('div', 'league-table-wrap');
     const table = node('table', 'league-table');
     const head = node('thead');
@@ -99,7 +99,15 @@
         position.append(note);
       }
       line.append(position);
-      [row.team, row.played, row.won, row.drawn, row.lost, row.gamesFor, row.gamesAgainst, row.penaltyPoints]
+      const team = node('td');
+      const teamButton = node('button', 'team-filter-button', row.team);
+      teamButton.type = 'button';
+      teamButton.title = 'Show only ' + row.team + ' results';
+      teamButton.setAttribute('aria-label', 'Show only ' + row.team + ' results');
+      teamButton.addEventListener('click', () => onTeamSelected(row.team));
+      team.append(teamButton);
+      line.append(team);
+      [row.played, row.won, row.drawn, row.lost, row.gamesFor, row.gamesAgainst, row.penaltyPoints]
         .forEach(value => line.append(node('td', '', value)));
       const points = node('td', '', row.points);
       if (row.pointDeduction > 0) {
@@ -215,12 +223,60 @@
       return;
     }
 
+    let selectedTeam = '';
+    const matches = league.matches || [];
+
     host.append(node('h2', 'league-subheading', 'League table'));
     host.append((league.standings || []).length
-      ? standingsTable(league.standings)
+      ? standingsTable(league.standings, selectTeam)
       : node('p', 'league-muted', 'The table will appear after the first official result is entered.'));
-    host.append(node('h2', 'league-subheading', 'Results'));
-    host.append(matchList(league.matches || []));
+
+    const resultsSection = node('section', 'league-results');
+    const resultsHeading = node('h2', 'league-subheading', 'Results');
+    const resultsNotice = node('p', 'league-results-notice');
+    resultsNotice.setAttribute('role', 'status');
+    const resultsList = node('div');
+    resultsSection.append(resultsHeading, resultsNotice, resultsList);
+    host.append(resultsSection);
+
+    function teamAppearsIn(match, team) {
+      return match.home === team || match.away === team;
+    }
+
+    function updateResults() {
+      const visibleMatches = selectedTeam
+        ? matches.filter(match => teamAppearsIn(match, selectedTeam))
+        : matches;
+      resultsHeading.textContent = selectedTeam
+        ? 'Results for ' + selectedTeam
+        : 'Results';
+      resultsNotice.replaceChildren();
+      if (selectedTeam) {
+        resultsNotice.append(
+          document.createTextNode('Showing only matches involving ' + selectedTeam + '. '),
+          (() => {
+            const clear = node('button', 'clear-team-filter', 'Clear filter');
+            clear.type = 'button';
+            clear.addEventListener('click', () => {
+              selectedTeam = '';
+              updateResults();
+            });
+            return clear;
+          })()
+        );
+      } else if (matches.length && (league.standings || []).length) {
+        resultsNotice.textContent = 'Select a team in the league table to show only its matches.';
+      }
+      resultsList.replaceChildren(matchList(visibleMatches));
+    }
+
+    function selectTeam(team) {
+      selectedTeam = team;
+      updateResults();
+      resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    updateResults();
   }
 
   document.addEventListener('DOMContentLoaded', async () => {
