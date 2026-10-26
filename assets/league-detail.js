@@ -150,6 +150,29 @@
     return wrap;
   }
 
+  function playerCell(name, colour) {
+    const cell = node('td');
+    const player = String(name || '').trim();
+    if (!player) {
+      cell.textContent = '—';
+      return cell;
+    }
+    if (colour) {
+      const badge = node('span', 'piece-colour piece-' + colour.toLowerCase());
+      badge.setAttribute('aria-hidden', 'true');
+      cell.setAttribute('aria-label', player + ', ' + colour);
+      cell.append(badge);
+    }
+    cell.append(document.createTextNode(player));
+    return cell;
+  }
+
+  function homeColour(board) {
+    const digits = String(board || '').trim().match(/^S?(\\d+)$/i);
+    if (!digits) return '';
+    return Number(digits[1]) % 2 ? 'Black' : 'White';
+  }
+
   function matchList(matches) {
     const list = node('div', 'league-matches');
     if (!matches.length) {
@@ -176,10 +199,13 @@
       const body = node('tbody');
       match.boards.forEach(board => {
         const row = node('tr', board.spare ? 'spare-board' : '');
+        const homeColourName = homeColour(board.board);
+        const awayColourName = homeColourName === 'Black' ? 'White' :
+          homeColourName === 'White' ? 'Black' : '';
         row.append(
           node('td', '', board.board),
-          node('td', '', board.homePlayer || '—'),
-          node('td', '', board.awayPlayer || '—'),
+          playerCell(board.homePlayer, homeColourName),
+          playerCell(board.awayPlayer, awayColourName),
           node('td', '', board.result || '—'),
           node('td', 'spare-label', board.spare ? 'Spare — not counted' : '')
         );
