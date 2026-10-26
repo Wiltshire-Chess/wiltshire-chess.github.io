@@ -236,7 +236,7 @@ function wccaMatches_(rows, settings) {
     }
 
     const boardValue = String(board).trim();
-    const spare = /^S\\d*$/i.test(boardValue);
+    const spare = /^S\d*$/i.test(boardValue);
     const defaultInfo = wccaDefaultInfo_(wccaField_(row, 'default', 'default status'));
     const rawResult = wccaField_(row, 'result', 'home result', 'score');
     // A default determines the board result even if the spreadsheet result
@@ -320,7 +320,7 @@ function wccaDefaultInfo_(value) {
 
 function wccaDefaultPenalty_(board) {
   const value = String(board || '').trim().toUpperCase();
-  if (/^S\\d*$/i.test(value)) return 1;
+  if (/^S\d*$/i.test(value)) return 1;
   const number = Number(value);
   if (number === 1) return 5;
   if (number === 2) return 4;
