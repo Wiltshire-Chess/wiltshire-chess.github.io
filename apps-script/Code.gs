@@ -110,3 +110,86 @@ function parseDate(value) {
   const date = new Date(value);
   return isNaN(date.getTime()) ? null : date;
 }
+
+/**
+ * Run once, while signed in as the Wiltshire Chess Google account.
+ * Creates the spreadsheet edit trigger and fills any existing blank News IDs.
+ */
+function wccaEnableNewsIdAutomation() {
+  const handler = 'wccaNewsIdOnEdit_';
+  const exists = ScriptApp.getProjectTriggers()
+    .some(trigger => trigger.getHandlerFunction() === handler);
+
+  if (!exists) {
+    ScriptApp.newTrigger(handler)
+      .forSpreadsheet(SPREADSHEET_ID)
+      .onEdit()
+      .create();
+  }
+
+  return wccaAssignMissingNewsIds_();
+}
+
+/**
+ * Runs automatically when News rows are edited. A title with no Article ID
+ * receives a permanent UUID. Existing IDs are never altered.
+ */
+function wccaNewsIdOnEdit_(event) {
+  if (!event || !event.range) return;
+
+  const sheet = event.range.getSheet();
+  if (sheet.getName() !== NEWS_SHEET) return;
+
+  const firstRow = Math.max(2, event.range.getRow());
+  const lastRow = event.range.getLastRow();
+  if (lastRow < 2) return;
+
+  wccaAssignNewsIdsInRows_(sheet, firstRow, lastRow);
+}
+
+/**
+ * Fills IDs for existing News entries where a title is present but Article ID
+ * is blank. It deliberately does not overwrite existing IDs.
+ */
+function wccaAssignMissingNewsIds_() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID)
+    .getSheetByName(NEWS_SHEET);
+
+  if (!sheet || sheet.getLastRow() < 2) return 0;
+  return wccaAssignNewsIdsInRows_(sheet, 2, sheet.getLastRow());
+}
+
+function wccaAssignNewsIdsInRows_(sheet, firstRow, lastRow) {
+  const headings = sheet.getRange(1, 1, 1, sheet.getLastColumn())
+    .getDisplayValues()[0]
+    .map(normalise);
+
+  const idIndex = ['articleid', 'id']
+    .map(name => headings.indexOf(name))
+    .find(index => index >= 0);
+  const titleIndex = ['headline', 'title']
+    .map(name => headings.indexOf(name))
+    .find(index => index >= 0);
+
+  if (idIndex === undefined || titleIndex === undefined) {
+    throw new Error('News tab requires Article ID and Title/Headline columns');
+  }
+
+  const rowCount = lastRow - firstRow + 1;
+  const titles = sheet.getRange(firstRow, titleIndex + 1, rowCount, 1)
+    .getDisplayValues();
+  const ids = sheet.getRange(firstRow, idIndex + 1, rowCount, 1)
+    .getDisplayValues();
+
+  let created = 0;
+  for (let offset = 0; offset < rowCount; offset += 1) {
+    if (String(titles[offset][0]).trim() &&
+        !String(ids[offset][0]).trim()) {
+      sheet.getRange(firstRow + offset, idIndex + 1)
+        .setValue(Utilities.getUuid());
+      created += 1;
+    }
+  }
+  return created;
+}
+
