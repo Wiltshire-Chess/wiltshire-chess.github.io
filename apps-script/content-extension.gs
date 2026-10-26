@@ -236,7 +236,7 @@ function wccaMatches_(rows, settings) {
     }
 
     const boardValue = String(board).trim();
-    const spare = boardValue.toUpperCase() === 'S';
+    const spare = /^S\\d*$/i.test(boardValue);
     const defaultInfo = wccaDefaultInfo_(wccaField_(row, 'default', 'default status'));
     const rawResult = wccaField_(row, 'result', 'home result', 'score');
     // A default determines the board result even if the spreadsheet result
@@ -262,8 +262,8 @@ function wccaMatches_(rows, settings) {
     if (defaultInfo.side === 'H') matches[key].homePenaltyPoints += penalty;
     if (defaultInfo.side === 'A') matches[key].awayPenaltyPoints += penalty;
 
-    // Only numeric boards count in the official match score.  S is a spare:
-    // displayed in the match detail, never included in the league calculation.
+    // Only numeric boards count in the official match score. S, S6, S7, etc.
+    // are spare boards: displayed in the match detail, never included in the league calculation.
     if (!spare && /^\d+$/.test(String(board).trim()) && result) {
       matches[key].homeScore += result.home;
       matches[key].awayScore += result.away;
@@ -320,7 +320,7 @@ function wccaDefaultInfo_(value) {
 
 function wccaDefaultPenalty_(board) {
   const value = String(board || '').trim().toUpperCase();
-  if (value === 'S') return 1;
+  if (/^S\\d*$/i.test(value)) return 1;
   const number = Number(value);
   if (number === 1) return 5;
   if (number === 2) return 4;
@@ -446,7 +446,7 @@ function wccaEnsureLiveTemplate_(book, name) {
     ['Match points win', '2'],
     ['Match points draw', '1'],
     ['Rules URL', ''],
-    ['Notes', 'Use 1 for a home win, 0 for a home loss, or 0.5 for a draw. Board S is a spare. Default: H or A; HA or AA is agreed in advance and carries no penalty.']
+    ['Notes', 'Use 1 for a home win, 0 for a home loss, or 0.5 for a draw. Use S6, S7 etc. for spare boards (S alone remains accepted). Default: H or A; HA or AA is agreed in advance and carries no penalty.']
   ]);
   sheet.getRange(8, 1, 1, 9).setValues([[
     'Date', 'Home Team', 'Away Team', 'Board',
