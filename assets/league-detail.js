@@ -168,7 +168,7 @@
   }
 
   function homeColour(board) {
-    const digits = String(board || '').trim().match(/^S?(\\d+)$/i);
+    const digits = String(board || '').trim().match(/^S?(\d+)$/i);
     if (!digits) return '';
     return Number(digits[1]) % 2 ? 'Black' : 'White';
   }
