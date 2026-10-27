@@ -236,7 +236,8 @@ function wccaMatches_(rows, settings) {
     }
 
     const boardValue = String(board).trim();
-    const spare = /^S\d*$/i.test(boardValue);
+    const boardInfo = wccaBoardInfo_(boardValue);
+    const spare = boardInfo.spare;
     const defaultInfo = wccaDefaultInfo_(wccaField_(row, 'default', 'default status'));
     const rawResult = wccaField_(row, 'result', 'home result', 'score');
     // A default determines the board result even if the spreadsheet result
@@ -246,7 +247,7 @@ function wccaMatches_(rows, settings) {
       wccaBoardResult_(rawResult);
     const displayedResult = defaultInfo.side === 'H' ? '0–1' :
       defaultInfo.side === 'A' ? '1–0' : wccaBoardDisplay_(rawResult);
-    const penalty = defaultInfo.penaltyEligible ? wccaDefaultPenalty_(boardValue) : 0;
+    const penalty = defaultInfo.penaltyEligible ? wccaDefaultPenalty_(boardInfo) : 0;
 
     matches[key].boards.push({
       board: boardValue,
@@ -255,6 +256,9 @@ function wccaMatches_(rows, settings) {
       result: displayedResult,
       notes: wccaField_(row, 'notes', 'note'),
       spare: spare,
+      homeColour: boardInfo.homeColour,
+      awayColour: wccaOtherColour_(boardInfo.homeColour),
+      colourOverride: boardInfo.colourOverride,
       defaultCode: defaultInfo.code,
       penaltyPoints: penalty
     });
@@ -262,9 +266,9 @@ function wccaMatches_(rows, settings) {
     if (defaultInfo.side === 'H') matches[key].homePenaltyPoints += penalty;
     if (defaultInfo.side === 'A') matches[key].awayPenaltyPoints += penalty;
 
-    // Only numeric boards count in the official match score. S, S6, S7, etc.
-    // are spare boards: displayed in the match detail, never included in the league calculation.
-    if (!spare && /^\d+$/.test(String(board).trim()) && result) {
+    // Only numbered league boards count in the official match score. S, S6,
+    // S6B, etc. are spare boards: displayed but never included in the table.
+    if (!spare && boardInfo.number && result) {
       matches[key].homeScore += result.home;
       matches[key].awayScore += result.away;
     }
@@ -318,10 +322,42 @@ function wccaDefaultInfo_(value) {
   return { code: '', side: '', penaltyEligible: false };
 }
 
-function wccaDefaultPenalty_(board) {
-  const value = String(board || '').trim().toUpperCase();
-  if (/^S\d*$/i.test(value)) return 1;
-  const number = Number(value);
+function wccaBoardInfo_(value) {
+  const text = String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+  // Legacy S is still accepted, but has no board number or derived colours.
+  if (text === 'S') {
+    return { spare: true, number: 0, homeColour: '', colourOverride: false };
+  }
+
+  // 1–99 are regular boards; S6–S99 are spares. A final B/W overrides
+  // the normal convention and always states the Home player's colour.
+  const match = text.match(/^(S?)(\d+)([BW])?$/);
+  if (!match) {
+    return { spare: false, number: 0, homeColour: '', colourOverride: false };
+  }
+
+  const spare = match[1] === 'S';
+  const number = Number(match[2]);
+  const override = match[3];
+  const homeColour = override === 'B' ? 'Black' :
+    override === 'W' ? 'White' :
+    (number % 2 ? 'Black' : 'White');
+
+  return {
+    spare: spare,
+    number: number,
+    homeColour: homeColour,
+    colourOverride: Boolean(override)
+  };
+}
+
+function wccaOtherColour_(colour) {
+  return colour === 'Black' ? 'White' : colour === 'White' ? 'Black' : '';
+}
+
+function wccaDefaultPenalty_(boardInfo) {
+  if (boardInfo.spare) return 1;
+  const number = Number(boardInfo.number);
   if (number === 1) return 5;
   if (number === 2) return 4;
   if (number === 3) return 3;
@@ -446,7 +482,7 @@ function wccaEnsureLiveTemplate_(book, name) {
     ['Match points win', '2'],
     ['Match points draw', '1'],
     ['Rules URL', ''],
-    ['Notes', 'Use 1 for a home win, 0 for a home loss, or 0.5 for a draw. Use S6, S7 etc. for spare boards (S alone remains accepted). Default: H or A; HA or AA is agreed in advance and carries no penalty.']
+    ['Notes', 'Use 1 for a home win, 0 for a home loss, or 0.5 for a draw. Board: 1, 2 etc.; use S6, S7 etc. for spares. A final B or W overrides the Home player colour (for example 1W or S6B). Default: H or A; HA or AA is agreed in advance and carries no penalty.']
   ]);
   sheet.getRange(8, 1, 1, 9).setValues([[
     'Date', 'Home Team', 'Away Team', 'Board',
