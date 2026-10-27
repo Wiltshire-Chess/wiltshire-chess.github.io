@@ -168,9 +168,10 @@
   }
 
   function homeColour(board) {
-    const digits = String(board || '').trim().match(/^S?(\d+)$/i);
-    if (!digits) return '';
-    return Number(digits[1]) % 2 ? 'Black' : 'White';
+    const match = String(board || '').trim().match(/^S?(\d+)([BW])?$/i);
+    if (!match) return '';
+    if (match[2]) return match[2].toUpperCase() === 'B' ? 'Black' : 'White';
+    return Number(match[1]) % 2 ? 'Black' : 'White';
   }
 
   function matchList(matches) {
@@ -199,9 +200,10 @@
       const body = node('tbody');
       match.boards.forEach(board => {
         const row = node('tr', board.spare ? 'spare-board' : '');
-        const homeColourName = homeColour(board.board);
-        const awayColourName = homeColourName === 'Black' ? 'White' :
-          homeColourName === 'White' ? 'Black' : '';
+        const homeColourName = board.homeColour || homeColour(board.board);
+        const awayColourName = board.awayColour ||
+          (homeColourName === 'Black' ? 'White' :
+            homeColourName === 'White' ? 'Black' : '');
         row.append(
           node('td', '', board.board),
           playerCell(board.homePlayer, homeColourName),
