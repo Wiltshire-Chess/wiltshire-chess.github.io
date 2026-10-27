@@ -137,12 +137,14 @@ function wccaLeague_(requestedName) {
   }
 
   if (entry.type === 'static') {
+    const staticContent = wccaStaticLeagueTable_(entry.dataSource);
     return {
       name: entry.name,
       type: 'static',
       description: entry.description,
       documents: wccaDirectoryDocuments_(entry),
-      table: wccaStaticLeagueTable_(entry.dataSource)
+      table: staticContent.table,
+      results: staticContent.results
     };
   }
 
