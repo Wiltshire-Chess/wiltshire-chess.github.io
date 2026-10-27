@@ -150,6 +150,60 @@
     return wrap;
   }
 
+  function staticCommentary(section, placement) {
+    if (!section || !section.commentary || section.commentaryPlacement !== placement) return null;
+    return node('p', 'league-section-commentary league-section-commentary-' + placement, section.commentary);
+  }
+
+  function staticResults(results) {
+    if (!results || !results.headings || !results.headings.length) {
+      return node('p', 'league-muted', 'No results have been entered yet.');
+    }
+
+    const headings = results.headings.map(value =>
+      String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+    );
+    const value = (row, ...names) => {
+      for (const name of names) {
+        const index = headings.indexOf(String(name).toLowerCase().replace(/[^a-z0-9]/g, ''));
+        if (index >= 0) return String(row[index] || '').trim();
+      }
+      return '';
+    };
+
+    const recognisable = ['hometeam', 'home', 'awayteam', 'away'].some(name => headings.includes(name));
+    if (!recognisable) return staticTable(results);
+
+    const list = node('div', 'static-results');
+    (results.rows || []).forEach(row => {
+      const date = value(row, 'date', 'match date');
+      const home = value(row, 'home team', 'home');
+      const away = value(row, 'away team', 'away');
+      const homeScore = value(row, 'home score', 'home points', 'home result');
+      const awayScore = value(row, 'away score', 'away points', 'away result');
+      const outcome = value(row, 'result', 'outcome', 'note', 'notes');
+      const card = node('article', 'static-result-card');
+      const summary = [home, homeScore && awayScore ? homeScore + '–' + awayScore : '', away]
+        .filter(Boolean).join(' ');
+      if (date) card.append(node('time', '', formatDate(date)));
+      card.append(node('strong', '', summary || 'Result'));
+      if (outcome) card.append(node('span', 'league-result', outcome));
+      list.append(card);
+    });
+    return list;
+  }
+
+  function appendStaticSection(host, title, section, renderContent) {
+    if (!section) return false;
+    host.append(node('h2', 'league-subheading', title));
+    const header = staticCommentary(section, 'header');
+    if (header) host.append(header);
+    host.append(renderContent(section));
+    const footer = staticCommentary(section, 'footer');
+    if (footer) host.append(footer);
+    return true;
+  }
+
   function playerCell(name, colour) {
     const cell = node('td');
     const player = String(name || '').trim();
@@ -246,8 +300,11 @@
     }
 
     if (league.type === 'static') {
-      host.append(node('h2', 'league-subheading', 'Table'));
-      host.append(staticTable(league.table));
+      const tableShown = appendStaticSection(host, 'Table', league.table, staticTable);
+      const resultsShown = appendStaticSection(host, 'Results', league.results, staticResults);
+      if (!tableShown && !resultsShown) {
+        host.append(node('p', 'league-muted', 'No table or results have been entered yet.'));
+      }
       return;
     }
 
