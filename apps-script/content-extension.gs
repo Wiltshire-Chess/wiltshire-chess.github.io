@@ -433,10 +433,57 @@ function wccaStaticLeagueTable_(tabName) {
   const sheet = SpreadsheetApp.openById(WCCA_CONTENT_SHEET_ID_).getSheetByName(tabName);
   if (!sheet) throw Error('Static table tab not found: ' + tabName);
   const values = sheet.getDataRange().getDisplayValues();
-  return {
-    headings: values[0] || [],
-    rows: values.slice(1).filter(row => row.some(value => String(value).trim()))
-  };
+
+  // Old static tabs remain valid: their first row is simply the table header.
+  if (!values.some(row => wccaStaticMarker_(row))) {
+    return {
+      table: {
+        headings: values[0] || [],
+        rows: values.slice(1).filter(row => row.some(value => String(value).trim())),
+        commentary: '',
+        commentaryPlacement: 'footer'
+      },
+      results: null
+    };
+  }
+
+  const sections = { table: null, results: null };
+  for (let index = 0; index < values.length; index++) {
+    const marker = wccaStaticMarker_(values[index]);
+    if (!marker) continue;
+
+    // The row immediately after a marker is its header row. Data continues
+    // until the next TABLE/RESULTS marker, or the end of the sheet.
+    const headings = values[index + 1] || [];
+    const rows = [];
+    let end = index + 2;
+    while (end < values.length && !wccaStaticMarker_(values[end])) {
+      if (values[end].some(value => String(value).trim())) rows.push(values[end]);
+      end++;
+    }
+
+    sections[marker] = {
+      headings: headings,
+      rows: rows,
+      commentary: String(values[index][1] || '').trim(),
+      commentaryPlacement: wccaStaticCommentaryPlacement_(values[index][2])
+    };
+    index = end - 1;
+  }
+  return sections;
+}
+
+function wccaStaticMarker_(row) {
+  const marker = String((row || [])[0] || '').trim().toUpperCase();
+  if (marker === 'TABLE') return 'table';
+  if (marker === 'RESULTS') return 'results';
+  return '';
+}
+
+function wccaStaticCommentaryPlacement_(value) {
+  return String(value || '').trim().toLowerCase() === 'header'
+    ? 'header'
+    : 'footer';
 }
 
 /* ---------- League setup ---------- */
