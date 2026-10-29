@@ -17,3 +17,22 @@
 
 /* Dropdown links must never inherit top-level nav auto margins. */
 .nav .nav-more .nav-more-links > a{margin-left:0;align-self:stretch;text-align:left}
+
+
+/* On small screens, keep the crown as a compact hero accent rather than a second panel. */
+@media (max-width:750px){
+  .hero{position:relative;display:block}
+  .hero-copy{padding:24px 86px 24px 24px}
+  .hero-logo{
+    position:absolute;
+    top:18px;
+    right:16px;
+    width:54px;
+    min-height:0;
+    height:auto;
+    background:transparent;
+    display:block;
+  }
+  .hero-logo img{display:block;width:54px;height:auto}
+  .hero-logo svg{width:54px;max-width:none}
+}
