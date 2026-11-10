@@ -237,9 +237,15 @@
     matches.forEach(match => {
       const details = node('details', 'league-match');
       const summary = node('summary');
+      const fixture = node('span', 'league-fixture');
+      fixture.append(
+        node('span', 'league-home-team', match.home),
+        node('strong', 'league-score', match.score),
+        node('span', 'league-away-team', match.away)
+      );
       summary.append(
         node('time', '', formatDate(match.date)),
-        node('strong', '', match.home + ' ' + match.score + ' ' + match.away),
+        fixture,
         node('span', 'league-result', match.result)
       );
       details.append(summary);
