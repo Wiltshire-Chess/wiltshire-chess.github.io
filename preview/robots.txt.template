@@ -1,0 +1,4 @@
+# Copy this file to the root of the separate preview repository as robots.txt.
+# Do not add it to the production repository root.
+User-agent: *
+Disallow: /

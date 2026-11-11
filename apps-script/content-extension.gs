@@ -77,7 +77,7 @@ function wccaSectionResponse_(e) {
       // opens one league, keeping the landing page quick.
       payload = { ok: true, leagues: wccaLeagueDirectory_() };
     } else if (section === 'league') {
-      payload = { ok: true, league: wccaLeague_(e.parameter.name || '') };
+      payload = { ok: true, league: wccaLeague_(e.parameter.name || e.parameter.league || '') };
     } else {
       payload = { ok: false, error: 'Unknown section' };
     }
@@ -91,61 +91,136 @@ function wccaSectionResponse_(e) {
 
 /* ---------- League directory ---------- */
 
-function wccaLeagueDirectory_() {
+/*
+ * The League directory is deliberately heading-driven.  Columns may be placed
+ * in any order, and older sheets that contain only the original columns keep
+ * working.  New metadata is returned by the public API but is not written back
+ * to the sheet until setupLeaguesV1 or a confirmed archive operation is run.
+ */
+const WCCA_LEAGUE_DIRECTORY_COLUMNS_ = [
+  'League name', 'Type of league', 'Place for the data',
+  'Description', 'Results Template', 'Schedule', 'Rules',
+  'League ID', 'Section', 'Season', 'Status', 'Sort order'
+];
+
+function wccaLeagueDirectoryContext_() {
   const book = SpreadsheetApp.openById(WCCA_CONTENT_SHEET_ID_);
   const sheet = book.getSheetByName('Leagues');
-  if (!sheet || sheet.getLastRow() < 2) return [];
+  if (!sheet || sheet.getLastRow() < 1) {
+    return { book: book, sheet: sheet, headings: [], rows: [] };
+  }
 
   const values = sheet.getDataRange().getDisplayValues();
-  const headings = values.shift().map(wccaKey_);
-  const value = (row, ...names) => {
-    for (const name of names) {
-      const i = headings.indexOf(wccaKey_(name));
-      if (i >= 0 && row[i]) return String(row[i]).trim();
-    }
-    return '';
-  };
+  const headings = (values.shift() || []).map(wccaKey_);
+  const rows = values.map((row, index) => ({
+    rowNumber: index + 2,
+    entry: wccaLeagueEntryFromRow_(row, headings)
+  })).filter(item => wccaValidLeagueEntry_(item.entry));
 
-  return values.map(row => ({
-    name: value(row, 'League name', 'League', 'Name'),
-    type: value(row, 'Type of league', 'Type').toLowerCase(),
-    dataSource: value(row, 'Place for the data', 'Data source', 'Source', 'Tab name', 'URL'),
-    description: value(row, 'Description', 'Summary'),
-    resultsTemplate: value(row, 'Results Template', 'Result Template', 'Template'),
-    schedule: value(row, 'Schedule'),
-    rules: value(row, 'Rules', 'Rules URL')
-  })).filter(league =>
-    league.name &&
-    ['live', 'external', 'static'].includes(league.type) &&
-    league.dataSource
-  );
+  return { book: book, sheet: sheet, headings: headings, rows: rows };
 }
 
-function wccaLeague_(requestedName) {
-  const name = String(requestedName || '').trim().toLowerCase();
-  const entry = wccaLeagueDirectory_().find(league => league.name.toLowerCase() === name);
+function wccaLeagueDirectory_() {
+  return wccaLeagueDirectoryContext_().rows.map(item => item.entry);
+}
+
+function wccaLeagueEntryFromRow_(row, headings) {
+  const type = wccaDirectoryValue_(row, headings, 'Type of league', 'Type').toLowerCase();
+  const defaults = wccaLeagueDefaults_(type);
+  const suppliedId = wccaDirectoryValue_(row, headings, 'League ID', 'ID').toLowerCase();
+  const sortText = wccaDirectoryValue_(row, headings, 'Sort order', 'Sort Order');
+  const parsedSort = Number(sortText);
+
+  return {
+    id: /^[a-z0-9-]+$/.test(suppliedId) ? suppliedId : '',
+    name: wccaDirectoryValue_(row, headings, 'League name', 'League', 'Name'),
+    type: type,
+    dataSource: wccaDirectoryValue_(row, headings,
+      'Place for the data', 'Data source', 'Source', 'Tab name', 'URL'),
+    description: wccaDirectoryValue_(row, headings, 'Description', 'Summary'),
+    resultsTemplate: wccaDirectoryValue_(row, headings,
+      'Results Template', 'Result Template', 'Template'),
+    schedule: wccaDirectoryValue_(row, headings, 'Schedule'),
+    rules: wccaDirectoryValue_(row, headings, 'Rules', 'Rules URL'),
+    section: wccaLeagueSection_(
+      wccaDirectoryValue_(row, headings, 'Section'),
+      defaults.section
+    ),
+    season: wccaDirectoryValue_(row, headings, 'Season'),
+    status: wccaDirectoryValue_(row, headings, 'Status') || defaults.status,
+    sortOrder: sortText !== '' && isFinite(parsedSort) ? parsedSort : null
+  };
+}
+
+function wccaDirectoryValue_(row, headings, ...names) {
+  for (const name of names) {
+    const index = headings.indexOf(wccaKey_(name));
+    const raw = index >= 0 ? row[index] : '';
+    const candidate = raw === null || raw === undefined ? '' : String(raw).trim();
+    if (candidate !== '') return candidate;
+  }
+  return '';
+}
+
+function wccaValidLeagueEntry_(entry) {
+  return entry.name &&
+    ['live', 'external', 'static'].includes(entry.type) &&
+    entry.dataSource;
+}
+
+function wccaLeagueDefaults_(type) {
+  if (type === 'live') return { section: 'Current', status: 'In progress' };
+  if (type === 'static') return { section: 'Historic', status: 'Complete' };
+  if (type === 'external') return { section: 'Associated', status: 'External' };
+  return { section: 'Current', status: '' };
+}
+
+function wccaLeagueSection_(value, fallback) {
+  const lookup = {
+    current: 'Current',
+    historic: 'Historic',
+    associated: 'Associated'
+  };
+  return lookup[String(value || '').trim().toLowerCase()] || fallback;
+}
+
+function wccaLeaguePublicMeta_(entry) {
+  return {
+    id: entry.id,
+    name: entry.name,
+    type: entry.type,
+    section: entry.section,
+    season: entry.season,
+    status: entry.status,
+    sortOrder: entry.sortOrder,
+    description: entry.description
+  };
+}
+
+function wccaLeague_(requestedLeague) {
+  const requested = String(requestedLeague || '').trim().toLowerCase();
+  const leagues = wccaLeagueDirectory_();
+
+  // New links use an ID.  The name lookup is deliberately retained for old
+  // shared URLs such as league.html?league=Wiltshire%2026%2F27%20Open.
+  const entry = leagues.find(league => league.id && league.id === requested) ||
+    leagues.find(league => league.name.toLowerCase() === requested);
   if (!entry) throw Error('League not found');
 
   if (entry.type === 'external') {
-    return {
-      name: entry.name,
-      type: 'external',
-      description: entry.description,
+    return Object.assign(wccaLeaguePublicMeta_(entry), {
       documents: wccaDirectoryDocuments_(entry),
       externalUrl: entry.dataSource
-    };
+    });
   }
 
   if (entry.type === 'static') {
     const staticContent = wccaStaticLeagueTable_(entry.dataSource);
-    return {
-      name: entry.name,
-      type: 'static',
-      description: entry.description,
+    return Object.assign(wccaLeaguePublicMeta_(entry), {
       documents: wccaDirectoryDocuments_(entry),
       table: staticContent.table,
       results: staticContent.results
-    };
+    });
   }
 
   return wccaLiveLeague_(entry);
@@ -181,10 +256,7 @@ function wccaLiveLeague_(entry) {
   const rows = headerRow >= 0 ? wccaObjectRows_(values, headerRow) : [];
   const matches = wccaMatches_(rows, settings);
 
-  return {
-    name: entry.name,
-    type: 'live',
-    description: entry.description,
+  return Object.assign(wccaLeaguePublicMeta_(entry), {
     settings: settings,
     documents: wccaMergeDocuments_(
       wccaDirectoryDocuments_(entry),
@@ -192,7 +264,7 @@ function wccaLiveLeague_(entry) {
     ),
     standings: wccaStandings_(matches),
     matches: matches
-  };
+  });
 }
 
 function wccaFindResultHeader_(values) {
@@ -493,32 +565,87 @@ function wccaStaticCommentaryPlacement_(value) {
 function setupLeaguesV1() {
   const book = SpreadsheetApp.openById(WCCA_CONTENT_SHEET_ID_);
   const directory = book.getSheetByName('Leagues') || book.insertSheet('Leagues');
+  wccaEnsureLeagueDirectoryColumns_(directory);
 
-  if (directory.getLastRow() === 0) {
-    directory.getRange(1, 1, 1, 7).setValues([[
-      'League name', 'Type of league', 'Place for the data',
-      'Description', 'Results Template', 'Schedule', 'Rules'
-    ]]);
-    directory.setFrozenRows(1);
-    directory.getRange('A1:G1').setFontWeight('bold');
-  } else if (directory.getLastColumn() < 7) {
-    directory.getRange(1, 4, 1, 4).setValues([[
-      'Description', 'Results Template', 'Schedule', 'Rules'
-    ]]);
-    directory.getRange('D1:G1').setFontWeight('bold');
-  }
-
-  wccaEnsureDirectoryRow_(directory, 'Wiltshire 26/27 Open', 'live', 'Wiltshire 26/27 Open');
-  wccaEnsureDirectoryRow_(directory, 'Wiltshire 26/27 Minor', 'live', 'Wiltshire 26/27 Minor');
+  // These rows are created only on a new workbook. Existing rows are not
+  // overwritten, including any existing IDs, descriptions or document URLs.
+  wccaEnsureDirectoryRow_(directory, {
+    id: 'open-2026-27',
+    name: 'Wiltshire 26/27 Open',
+    type: 'live',
+    dataSource: 'Wiltshire 26/27 Open',
+    section: 'Current',
+    season: '2026/27',
+    status: 'In progress'
+  });
+  wccaEnsureDirectoryRow_(directory, {
+    id: 'minor-2026-27',
+    name: 'Wiltshire 26/27 Minor',
+    type: 'live',
+    dataSource: 'Wiltshire 26/27 Minor',
+    section: 'Current',
+    season: '2026/27',
+    status: 'In progress'
+  });
   wccaEnsureLiveTemplate_(book, 'Wiltshire 26/27 Open');
   wccaEnsureLiveTemplate_(book, 'Wiltshire 26/27 Minor');
   SpreadsheetApp.flush();
 }
 
-function wccaEnsureDirectoryRow_(sheet, name, type, source) {
-  const values = sheet.getDataRange().getDisplayValues();
-  if (values.slice(1).some(row => String(row[0] || '').trim().toLowerCase() === name.toLowerCase())) return;
-  sheet.appendRow([name, type, source]);
+function wccaEnsureLeagueDirectoryColumns_(sheet) {
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, WCCA_LEAGUE_DIRECTORY_COLUMNS_.length)
+      .setValues([WCCA_LEAGUE_DIRECTORY_COLUMNS_]);
+  } else {
+    const existing = sheet.getRange(1, 1, 1, sheet.getLastColumn())
+      .getDisplayValues()[0].map(wccaKey_);
+    WCCA_LEAGUE_DIRECTORY_COLUMNS_.forEach(column => {
+      if (!existing.includes(wccaKey_(column))) {
+        sheet.getRange(1, sheet.getLastColumn() + 1).setValue(column);
+        existing.push(wccaKey_(column));
+      }
+    });
+  }
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, sheet.getLastColumn()).setFontWeight('bold');
+  return sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0]
+    .map(wccaKey_);
+}
+
+function wccaEnsureDirectoryRow_(sheet, valuesToSet) {
+  const headings = wccaEnsureLeagueDirectoryColumns_(sheet);
+  const existing = sheet.getDataRange().getDisplayValues();
+  const name = String(valuesToSet.name || '').trim().toLowerCase();
+  if (existing.slice(1).some(row =>
+    wccaDirectoryValue_(row, headings, 'League name', 'League', 'Name')
+      .toLowerCase() === name
+  )) return;
+
+  const row = Array(headings.length).fill('');
+  wccaDirectorySetInRow_(row, headings, ['League ID', 'ID'], valuesToSet.id || '');
+  wccaDirectorySetInRow_(row, headings, ['League name', 'League', 'Name'], valuesToSet.name || '');
+  wccaDirectorySetInRow_(row, headings, ['Type of league', 'Type'], valuesToSet.type || '');
+  wccaDirectorySetInRow_(row, headings,
+    ['Place for the data', 'Data source', 'Source', 'Tab name', 'URL'],
+    valuesToSet.dataSource || ''
+  );
+  wccaDirectorySetInRow_(row, headings, ['Section'], valuesToSet.section || '');
+  wccaDirectorySetInRow_(row, headings, ['Season'], valuesToSet.season || '');
+  wccaDirectorySetInRow_(row, headings, ['Status'], valuesToSet.status || '');
+  sheet.appendRow(row);
+}
+
+function wccaDirectorySetInRow_(row, headings, names, value) {
+  const index = wccaDirectoryColumnIndex_(headings, names);
+  if (index >= 0) row[index] = value;
+}
+
+function wccaDirectoryColumnIndex_(headings, names) {
+  for (const name of names) {
+    const index = headings.indexOf(wccaKey_(name));
+    if (index >= 0) return index;
+  }
+  return -1;
 }
 
 function wccaEnsureLiveTemplate_(book, name) {
@@ -540,6 +667,226 @@ function wccaEnsureLiveTemplate_(book, name) {
   sheet.setFrozenRows(8);
   sheet.getRange('A8:I8').setFontWeight('bold');
   sheet.autoResizeColumns(1, 9);
+}
+
+/* ---------- Safe archive operation ---------- */
+
+/*
+ * This function is intentionally NOT exposed through doGet.  It is a manual
+ * Apps Script operation.  It requires both Settings values below and only
+ * accepts an exact League ID for a currently-live directory entry.
+ */
+function wccaArchiveLeague() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    throw Error('Another archive operation is already running. Please wait and try again.');
+  }
+
+  try {
+    const settingsContext = wccaSettingsContext_();
+    const archiveId = wccaReadSetting_(settingsContext, 'Archive League ID');
+    const confirmation = wccaReadSetting_(settingsContext, 'Archive Confirmation');
+
+    if (!archiveId) {
+      throw Error('Archive League ID is blank. Enter the live league ID in Settings first.');
+    }
+    if (confirmation !== 'ARCHIVE') {
+      throw Error('Archive Confirmation must be exactly ARCHIVE before an archive can run.');
+    }
+
+    const directoryContext = wccaLeagueDirectoryContext_();
+    if (!directoryContext.sheet) throw Error('Leagues tab not found.');
+    const requestedId = archiveId.toLowerCase();
+    const directoryRow = directoryContext.rows.find(item =>
+      item.entry.id === requestedId
+    );
+
+    // Deliberately no league-name fallback here: archive operations must use a
+    // stable ID so a human cannot archive the wrong season by a similar name.
+    if (!directoryRow) {
+      throw Error('Archive League ID "' + archiveId +
+        '" does not match a valid League ID in the Leagues tab.');
+    }
+    if (directoryRow.entry.type !== 'live') {
+      throw Error('League "' + directoryRow.entry.name +
+        '" is not live and cannot be archived.');
+    }
+
+    const book = directoryContext.book;
+    const sourceSheet = book.getSheetByName(directoryRow.entry.dataSource);
+    if (!sourceSheet) {
+      throw Error('Live source tab not found: ' + directoryRow.entry.dataSource);
+    }
+
+    // Calculate from the same live parsing and scoring logic used by the
+    // public site, then take a values-only copy before altering the directory.
+    const finalLeague = wccaLiveLeague_(directoryRow.entry);
+    const rawValues = sourceSheet.getDataRange().getValues();
+    const stamp = new Date();
+    const suffix = wccaArchiveSuffix_(directoryRow.entry);
+    const summaryName = wccaUniqueSheetName_(book, 'Archive ' + suffix);
+    const rawName = wccaUniqueSheetName_(book, 'Archive Raw ' + suffix);
+
+    // Ensure the metadata columns exist only after every validation above has
+    // passed. This never changes values in existing directory rows.
+    const directoryHeadings = wccaEnsureLeagueDirectoryColumns_(directoryContext.sheet);
+
+    // New tabs always use unique names. No source or existing archive tab is
+    // overwritten or deleted.
+    const rawSheet = book.insertSheet(rawName);
+    if (rawValues.length && rawValues[0].length) {
+      rawSheet.getRange(1, 1, rawValues.length, rawValues[0].length)
+        .setValues(rawValues);
+    }
+    const frozenRows = sourceSheet.getFrozenRows();
+    if (frozenRows > 0) rawSheet.setFrozenRows(Math.min(frozenRows, rawValues.length));
+
+    const summarySheet = book.insertSheet(summaryName);
+    const summaryValues = wccaArchiveSummaryValues_(directoryRow.entry, finalLeague, stamp);
+    const width = summaryValues.reduce((maximum, row) => Math.max(maximum, row.length), 1);
+    const rectangularValues = summaryValues.map(row =>
+      row.concat(Array(width - row.length).fill(''))
+    );
+    summarySheet.getRange(1, 1, rectangularValues.length, width)
+      .setValues(rectangularValues);
+    summarySheet.setFrozenRows(Math.min(3, rectangularValues.length));
+    summarySheet.getRange(1, 1, 1, width).setFontWeight('bold');
+    summarySheet.autoResizeColumns(1, width);
+
+    wccaDirectorySetCell_(directoryContext.sheet, directoryRow.rowNumber,
+      directoryHeadings, ['Type of league', 'Type'], 'static');
+    wccaDirectorySetCell_(directoryContext.sheet, directoryRow.rowNumber,
+      directoryHeadings,
+      ['Place for the data', 'Data source', 'Source', 'Tab name', 'URL'],
+      summaryName);
+    wccaDirectorySetCell_(directoryContext.sheet, directoryRow.rowNumber,
+      directoryHeadings, ['Section'], 'Historic');
+    wccaDirectorySetCell_(directoryContext.sheet, directoryRow.rowNumber,
+      directoryHeadings, ['Status'], 'Complete');
+
+    const result = 'Archived ' + directoryRow.entry.name + ' to "' +
+      summaryName + '" and "' + rawName + '" on ' +
+      Utilities.formatDate(stamp, Session.getScriptTimeZone(), 'd MMM yyyy HH:mm');
+    wccaWriteSetting_(settingsContext, 'Archive Confirmation', '');
+    wccaWriteSetting_(settingsContext, 'Last archive result', result);
+    SpreadsheetApp.flush();
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function wccaArchiveSummaryValues_(entry, league, archivedAt) {
+  const stamp = Utilities.formatDate(
+    archivedAt, Session.getScriptTimeZone(), 'd MMM yyyy HH:mm'
+  );
+  const rows = [
+    ['Archive note', 'Frozen final record created ' + stamp +
+      '. The original board-by-board source has been retained in the raw archive tab.'],
+    ['TABLE', 'Final standings frozen on ' + stamp + '.', 'header'],
+    ['#', 'Team', 'P', 'W', 'D', 'L', 'GF', 'GA', 'Pen', 'Pts']
+  ];
+
+  (league.standings || []).forEach(team => {
+    rows.push([
+      team.position, team.team, team.played, team.won, team.drawn, team.lost,
+      team.gamesFor, team.gamesAgainst, team.penaltyPoints, team.points
+    ]);
+  });
+
+  rows.push(
+    ['RESULTS', 'Dated match-level results. Board-by-board detail is retained in the raw archive tab.', 'header'],
+    ['Date', 'Home Team', 'Home Score', 'Away Score', 'Away Team', 'Result']
+  );
+
+  (league.matches || []).forEach(match => {
+    rows.push([
+      match.date, match.home, wccaFormatScore_(match.homeScore),
+      wccaFormatScore_(match.awayScore), match.away, match.result
+    ]);
+  });
+
+  return rows;
+}
+
+function wccaArchiveSuffix_(entry) {
+  const name = String(entry.name || 'League').trim();
+  const season = String(entry.season || '').trim();
+  const combined = season && name.indexOf(season) < 0 ? name + ' ' + season : name;
+  return wccaSafeSheetName_(combined) || 'League';
+}
+
+function wccaSafeSheetName_(value) {
+  return String(value || '')
+    .replace(/[\[\]\*\/\\\?\:]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 96);
+}
+
+function wccaUniqueSheetName_(book, base) {
+  const safeBase = wccaSafeSheetName_(base) || 'Archive';
+  let candidate = safeBase.slice(0, 100);
+  let counter = 2;
+  while (book.getSheetByName(candidate)) {
+    const suffix = ' ' + counter++;
+    candidate = safeBase.slice(0, 100 - suffix.length) + suffix;
+  }
+  return candidate;
+}
+
+function wccaDirectorySetCell_(sheet, rowNumber, headings, names, value) {
+  const column = wccaDirectoryColumnIndex_(headings, names);
+  if (column < 0) throw Error('League directory column is missing: ' + names[0]);
+  sheet.getRange(rowNumber, column + 1).setValue(value);
+}
+
+function wccaSettingsContext_() {
+  const book = SpreadsheetApp.openById(WCCA_CONTENT_SHEET_ID_);
+  const sheet = book.getSheetByName('Settings');
+  if (!sheet || sheet.getLastRow() < 1) {
+    throw Error('Settings tab not found. Add a Settings tab with Setting and Value columns.');
+  }
+  const values = sheet.getDataRange().getDisplayValues();
+  const headings = (values[0] || []).map(wccaKey_);
+  const settingColumn = wccaDirectoryColumnIndex_(headings, ['Setting', 'Key']);
+  const valueColumn = wccaDirectoryColumnIndex_(headings, ['Value']);
+  if (settingColumn < 0 || valueColumn < 0) {
+    throw Error('Settings tab must have columns headed Setting and Value.');
+  }
+  return {
+    sheet: sheet,
+    values: values,
+    settingColumn: settingColumn,
+    valueColumn: valueColumn
+  };
+}
+
+function wccaReadSetting_(context, setting) {
+  const wanted = wccaKey_(setting);
+  for (let index = 1; index < context.values.length; index++) {
+    if (wccaKey_(context.values[index][context.settingColumn]) === wanted) {
+      return String(context.values[index][context.valueColumn] || '').trim();
+    }
+  }
+  return '';
+}
+
+function wccaWriteSetting_(context, setting, value) {
+  const wanted = wccaKey_(setting);
+  for (let index = 1; index < context.values.length; index++) {
+    if (wccaKey_(context.values[index][context.settingColumn]) === wanted) {
+      context.sheet.getRange(index + 1, context.valueColumn + 1).setValue(value);
+      context.values[index][context.valueColumn] = value;
+      return;
+    }
+  }
+  const row = Math.max(context.sheet.getLastRow() + 1, 2);
+  context.sheet.getRange(row, context.settingColumn + 1).setValue(setting);
+  context.sheet.getRange(row, context.valueColumn + 1).setValue(value);
+  context.values.push(Array(Math.max(context.settingColumn, context.valueColumn) + 1).fill(''));
+  context.values[context.values.length - 1][context.settingColumn] = setting;
+  context.values[context.values.length - 1][context.valueColumn] = value;
 }
 
 /* ---------- helpers ---------- */
