@@ -155,7 +155,8 @@ function wccaLeagueEntryFromRow_(row, headings) {
 function wccaDirectoryValue_(row, headings, ...names) {
   for (const name of names) {
     const index = headings.indexOf(wccaKey_(name));
-    const candidate = index >= 0 ? String(row[index] || '').trim() : '';
+    const raw = index >= 0 ? row[index] : '';
+    const candidate = raw === null || raw === undefined ? '' : String(raw).trim();
     if (candidate !== '') return candidate;
   }
   return '';
