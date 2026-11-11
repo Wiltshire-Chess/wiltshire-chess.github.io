@@ -84,3 +84,11 @@
   .league-match .league-result{grid-column:2;grid-row:1}
   .league-fixture{grid-column:1 / -1;grid-row:2;gap:.55rem}
 }
+
+
+/* Grouped directory keeps the existing responsive card grid at every width. */
+.league-groups{display:grid;gap:2rem;max-width:90rem}
+.league-group{min-width:0}
+.league-group-title{margin:0 0:.8rem;font-size:1.35rem}
+.league-card h3{margin:0 0:4px;font-size:1.22rem}
+.league-season{margin:.15rem 0 .55rem;color:var(--accent);font-size:.92rem;font-weight:700}
